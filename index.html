@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>مفكرتي الشخصية</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root { --main: #075e54; --bg: #e5ddd5; --white: #ffffff; --msg-me: #dcf8c6; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f0f0; overflow: hidden; }
+
+        /* --- واجهة التمويه (المفكرة) --- */
+        #fakeApp { display: flex; flex-direction: column; height: 100%; background: white; position: absolute; width: 100%; z-index: 999; }
+        .fake-header { padding: 15px; background: #f8f9fa; border-bottom: 1px solid #ddd; font-weight: bold; color: #333; }
+        #noteArea { flex: 1; padding: 20px; border: none; outline: none; font-size: 1.1rem; resize: none; line-height: 1.6; }
+        .save-btn { padding: 18px; background: #28a745; color: white; border: none; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+
+        /* --- واجهة الشات الحقيقية --- */
+        #realApp { display: none; flex-direction: column; height: 100%; background: var(--bg); }
+        .chat-header { background: var(--main); color: white; padding: 10px 15px; display: flex; align-items: center; gap: 12px; height: 65px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+        .status-dot.online { background: #4df14d; }
+        .header-info { display: flex; flex-direction: column; }
+        .status-text { font-size: 0.75rem; color: #adffad; }
+
+        /* --- الدخول بالـ ID --- */
+        #loginScreen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: white; padding: 30px; gap: 20px; }
+        .input-field { width: 100%; max-width: 320px; padding: 14px 20px; border: 1.5px solid #eee; border-radius: 30px; outline: none; font-size: 1rem; text-align: center; background: #fafafa; }
+        .enter-btn { width: 100%; max-width: 320px; padding: 14px; border-radius: 30px; border: none; background: var(--main); color: white; font-weight: bold; cursor: pointer; font-size: 1rem; }
+
+        /* --- صندوق الرسائل --- */
+        #chatView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #messageList { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 8px 14px; border-radius: 12px; max-width: 80%; font-size: 0.95rem; line-height: 1.4; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg.me { align-self: flex-start; background: var(--msg-me); border-top-right-radius: 2px; }
+        .msg.other { align-self: flex-end; background: var(--white); border-top-left-radius: 2px; }
+        .time { font-size: 0.65rem; color: #888; margin-top: 4px; display: block; }
+
+        /* --- شريط الكتابة --- */
+        .input-area { background: #f0f0f0; padding: 10px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #ddd; }
+        #msgInput { flex: 1; padding: 12px 20px; border-radius: 30px; border: 1px solid #ddd; outline: none; font-size: 1rem; }
+        #sendBtn { background: var(--main); color: white; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div id="fakeApp">
+        <div class="fake-header">ملاحظات سريعة</div>
+        <textarea id="noteArea" placeholder="اكتب ملاحظاتك هنا ليتم حفظها تلقائياً..."></textarea>
+        <button class="save-btn" onclick="checkAuth()">حفظ المذكرة</button>
+    </div>
+
+    <div id="realApp">
+        <div class="chat-header">
+            <div id="stateDot" class="status-dot"></div>
+            <div class="header-info">
+                <strong id="displayFriend">الشات السري</strong>
+                <span id="displayStatus" class="status-text">جاري التحميل...</span>
+            </div>
+            <button onclick="location.reload()" style="margin-right: auto; background: none; border: none; color: white; font-size: 1.3rem;">🔒</button>
+        </div>
+
+        <div id="loginScreen">
+            <h2 style="color: var(--main); margin-bottom: 10px;">تسجيل الدخول</h2>
+            <input type="text" id="myId" class="input-field" placeholder="ID الخاص بك">
+            <input type="text" id="friendId" class="input-field" placeholder="ID الطرف الآخر">
+            <button class="enter-btn" onclick="startApp()">دخول الغرفة</button>
+        </div>
+
+        <div id="chatView">
+            <div id="messageList"></div>
+            <div class="input-area">
+                <input type="text" id="msgInput" placeholder="اكتب رسالة...">
+                <button id="sendBtn" onclick="sendMsg()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onValue, set, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js";
+
+        // إعداداتك الحقيقية
+        const firebaseConfig = {
+          apiKey: "AIzaSyAmk3IaUmNhaU7nAwcCr1nS2J0TUdTlzEk",
+          authDomain: "sasaffeg.firebaseapp.com",
+          databaseURL: "https://sasaffeg-default-rtdb.firebaseio.com",
+          projectId: "sasaffeg",
+          storageBucket: "sasaffeg.firebasestorage.app",
+          messagingSenderId: "224441214532",
+          appId: "1:224441214532:web:bc829f90f88af97b7cbe11"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const messaging = getMessaging(app);
+
+        let myUID, friendUID, roomID;
+
+        // 1. فك التمويه (كلمة السر 2244)
+        window.checkAuth = () => {
+            if (document.getElementById('noteArea').value.trim() === "2244") {
+                document.getElementById('fakeApp').style.display = 'none';
+                document.getElementById('realApp').style.display = 'flex';
+                initNotifications();
+            } else {
+                alert("تم الحفظ بنجاح!");
+            }
+        };
+
+        // 2. تفعيل الإشعارات
+        async function initNotifications() {
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const token = await getToken(messaging, { 
+                        vapidKey: 'BJ7rAi4bE4AV8JH5lZLUN41V_3haddDr94zv3gzjLzsjH93FsOLvHie-ABhiJYRti3Sa97TNnGUSxryRjDlXa7w' 
+                    });
+                    console.log("Token generated");
+                }
+            } catch (err) { console.log("Notification error", err); }
+        }
+
+        // 3. بدء الشات
+        window.startApp = () => {
+            myUID = document.getElementById('myId').value.trim().toLowerCase();
+            friendUID = document.getElementById('friendId').value.trim().toLowerCase();
+
+            if (!myUID || !friendUID) return alert("أدخل الـ IDs");
+
+            roomID = myUID < friendUID ? `${myUID}_${friendUID}` : `${friendUID}_${myUID}`;
+            
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('chatView').style.display = 'flex';
+            document.getElementById('displayFriend').innerText = "شات: " + friendUID;
+
+            syncStatus();
+            syncMessages();
+        };
+
+        // 4. نظام المتصل الآن (Presence)
+        function syncStatus() {
+            const myPresence = ref(db, 'status/' + myUID);
+            const connectedRef = ref(db, '.info/connected');
+
+            onValue(connectedRef, (snap) => {
+                if (snap.val() === true) {
+                    onDisconnect(myPresence).set({ state: 'offline', last: serverTimestamp() });
+                    set(myPresence, { state: 'online', last: serverTimestamp() });
+                }
+            });
+
+            onValue(ref(db, 'status/' + friendUID), (snap) => {
+                const val = snap.val();
+                const textEl = document.getElementById('displayStatus');
+                const dotEl = document.getElementById('stateDot');
+                if (val) {
+                    if (val.state === 'online') {
+                        textEl.innerText = "متصل الآن";
+                        dotEl.className = "status-dot online";
+                    } else {
+                        const d = new Date(val.last);
+                        textEl.innerText = `آخر ظهور: ${d.getHours()}:${d.getMinutes()}`;
+                        dotEl.className = "status-dot";
+                    }
+                }
+            });
+        }
+
+        // 5. استقبال الرسائل
+        function syncMessages() {
+            onValue(ref(db, 'chats/' + roomID), (snap) => {
+                const list = document.getElementById('messageList');
+                list.innerHTML = "";
+                const data = snap.val();
+                if (data) {
+                    Object.values(data).forEach(m => {
+                        const div = document.createElement('div');
+                        div.className = "msg " + (m.sender === myUID ? "me" : "other");
+                        div.innerHTML = `${m.text} <span class="time">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>`;
+                        list.appendChild(div);
+                    });
+                    list.scrollTop = list.scrollHeight;
+                }
+            });
+        }
+
+        // 6. إرسال الرسالة
+        window.sendMsg = () => {
+            const input = document.getElementById('msgInput');
+            if (input.value.trim()) {
+                push(ref(db, 'chats/' + roomID), {
+                    sender: myUID,
+                    text: input.value.trim(),
+                    time: serverTimestamp()
+                });
+                input.value = "";
+            }
+        };
+
+        // Enter key to send
+        document.getElementById('msgInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMsg(); });
+
+        // Foreground notification
+        onMessage(messaging, (payload) => {
+            new Notification(payload.notification.title, { body: payload.notification.body });
+        });
+    </script>
+</body>
+</html>
