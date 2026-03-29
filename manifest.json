@@ -1,0 +1,17 @@
+{
+  "name": "مذكراتي الخاصة",
+  "short_name": "مذكرات",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fffde7",
+  "theme_color": "#fbc02d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/564/564445.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
