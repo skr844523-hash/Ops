@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Notes Pro Max</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#008069">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --main: #00a884; --bg: #e5ddd5; --my-msg: #dcf8c6; --mic: #3b82f6; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+
+        /* --- واجهة المذكرة --- */
+        #note-ui { height: 100%; display: flex; flex-direction: column; background: #fff9c4; position: relative; z-index: 9999; }
+        #note-text { flex: 1; padding: 25px; border: none; outline: none; background: transparent; font-size: 19px; line-height: 1.6; }
+
+        /* --- واجهة الدردشة --- */
+        #chat-ui { display: none; height: 100%; flex-direction: column; background: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png') var(--bg); }
+        .header { background: #008069; color: white; padding: 10px 15px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .header img { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #fff; }
+
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth; }
+
+        /* فقاعات الرسائل */
+        .msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; position: relative; font-size: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; animation: pop 0.2s ease; }
+        @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .sent { align-self: flex-end; background: var(--my-msg); border-top-left-radius: 12px; }
+        .received { align-self: flex-start; background: #fff; border-top-right-radius: 12px; }
+        .stk-msg { background: transparent !important; box-shadow: none !important; }
+        .stk-msg img { width: 110px; height: 110px; object-fit: contain; }
+
+        /* التفاعلات */
+        .react-box { position: absolute; bottom: -10px; left: 5px; background: #fff; border-radius: 10px; padding: 1px 5px; font-size: 11px; border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .sent .react-box { left: auto; right: 5px; }
+
+        /* لوحة الملصقات والإيموجي الصغير */
+        #picker-panel { display: none; position: absolute; bottom: 70px; left: 10px; width: 280px; height: 320px; background: #fff; border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.2); z-index: 5000; flex-direction: column; border: 1px solid #ddd; }
+        .picker-tabs { display: flex; background: #f0f0f0; border-radius: 15px 15px 0 0; }
+        .tab-btn { flex: 1; padding: 12px; border: none; background: none; cursor: pointer; font-weight: bold; color: #555; }
+        .tab-btn.active { background: #fff; color: var(--main); border-bottom: 3px solid var(--main); }
+        .picker-content { flex: 1; overflow-y: auto; padding: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .picker-content img, .picker-content span { width: 100%; height: 50px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; transition: 0.2s; }
+
+        /* شريط الإدخال */
+        .input-bar { background: #f0f2f5; padding: 10px; display: flex; align-items: center; gap: 8px; }
+        .input-box { flex: 1; background: #fff; border-radius: 25px; display: flex; align-items: center; padding: 2px 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        #msg-input { flex: 1; border: none; outline: none; padding: 10px; font-size: 16px; background: transparent; }
+        
+        .btn-act { width: 45px; height: 45px; border-radius: 50%; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem; flex-shrink: 0; transition: 0.3s; }
+        #send-btn { background: var(--main); }
+        #mic-btn { background: var(--mic); }
+        .recording { background: #ff3b30 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { transform: scale(1.1); opacity: 0.7; } }
+
+        /* القائمة السفلية */
+        #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 6000; }
+        #action-sheet { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 20px 20px 0 0; z-index: 6001; padding: 10px 0; transform: translateY(100%); transition: 0.3s; }
+        .sheet-item { padding: 15px 25px; display: flex; align-items: center; gap: 15px; font-size: 16px; border-bottom: 1px solid #f5f5f5; }
+    </style>
+</head>
+<body>
+
+    <div id="note-ui">
+        <div style="background:#fbc02d; padding:15px; font-weight:bold;">📝 ملاحظات</div>
+        <textarea id="note-text" placeholder="اكتب ملاحظة..."></textarea>
+    </div>
+
+    <div id="chat-ui">
+        <div class="header">
+            <img src="https://ui-avatars.com/api/?name=User&background=00a884&color=fff">
+            <div style="flex:1"><b>الدردشة السرية</b><br><small>متصل الآن</small></div>
+            <i class="fas fa-ellipsis-v"></i>
+        </div>
+
+        <div id="messages"></div>
+
+        <div id="picker-panel">
+            <div class="picker-tabs">
+                <button class="tab-btn active" onclick="showTab('stk')">ملصقات</button>
+                <button class="tab-btn" onclick="showTab('emo')">إيموجي</button>
+                <button class="tab-btn" onclick="showTab('fav')">⭐</button>
+            </div>
+            <div id="tab-stk" class="picker-content">
+                <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif" onclick="sendStk(this.src)">
+                <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.gif" onclick="sendStk(this.src)">
+                <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" onclick="sendStk(this.src)">
+                <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4af/512.gif" onclick="sendStk(this.src)">
+            </div>
+            <div id="tab-emo" class="picker-content" style="display:none;">
+                <span onclick="addEmo('😂')">😂</span><span onclick="addEmo('❤️')">❤️</span><span onclick="addEmo('🔥')">🔥</span><span onclick="addEmo('😍')">😍</span>
+            </div>
+            <div id="tab-fav" class="picker-content" style="display:none;"></div>
+        </div>
+
+        <div class="input-bar">
+            <div class="input-box">
+                <i class="far fa-face-smile" style="color:#667781; font-size:1.4rem; cursor:pointer;" onclick="togglePicker()"></i>
+                <input type="text" id="msg-input" placeholder="مراسلة">
+            </div>
+            <button id="mic-btn" class="btn-act"><i class="fas fa-microphone"></i></button>
+            <button id="send-btn" class="btn-act"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <div id="overlay" onclick="closeSheet()"></div>
+    <div id="action-sheet">
+        <div class="sheet-item" onclick="handle('react', '👍')">👍 أعجبني</div>
+        <div class="sheet-item" onclick="handle('react', '❤️')">❤️ قلب</div>
+        <div class="sheet-item" id="edit-opt" onclick="handle('edit')"><i class="fas fa-pen"></i> تعديل</div>
+        <div class="sheet-item" id="del-opt" onclick="handle('delete')" style="color:red"><i class="fas fa-trash"></i> حذف عند الجميع</div>
+        <div class="sheet-item" id="save-stk-opt" onclick="handle('saveStk')" style="display:none;"><i class="fas fa-star"></i> إضافة للملصقات</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, onChildChanged, onChildRemoved, serverTimestamp, remove, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHleS3vqpik1BzJ3dal2L245dsrlo9lx0",
+            authDomain: "mons-eb73c.firebaseapp.com",
+            databaseURL: "https://mons-eb73c-default-rtdb.firebaseio.com",
+            projectId: "mons-eb73c",
+            storageBucket: "mons-eb73c.firebasestorage.app",
+            messagingSenderId: "1054828640380",
+            appId: "1:1054828640380:web:6a3e4e5d208adc4894b1f9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const auth = getAuth(app);
+        let selId = null, selText = "", selStk = "";
+
+        // دخول وتسجيل صامت عشان نضمن الإرسال
+        document.getElementById('note-text').oninput = async (e) => {
+            if(e.target.value.includes("You")) {
+                await signInAnonymously(auth);
+                document.getElementById('note-ui').style.display = 'none';
+                document.getElementById('chat-ui').style.display = 'flex';
+                loadFavs(); loadMsgs();
+            }
+        };
+
+        window.sendStk = (url) => {
+            if(!auth.currentUser) return;
+            push(ref(db, 'msgs'), { sticker: url, uid: auth.currentUser.uid, time: serverTimestamp() });
+            togglePicker();
+        };
+
+        window.addEmo = (e) => { document.getElementById('msg-input').value += e; };
+
+        document.getElementById('send-btn').onclick = () => {
+            const inp = document.getElementById('msg-input');
+            if(inp.value.trim() && auth.currentUser) {
+                push(ref(db, 'msgs'), { text: inp.value.trim(), uid: auth.currentUser.uid, time: serverTimestamp() });
+                inp.value = "";
+            }
+        };
+
+        // ميكروفون احترافي
+        let rec, chunks = [];
+        const mic = document.getElementById('mic-btn');
+        mic.onmousedown = async () => {
+            try {
+                const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+                rec = new MediaRecorder(s);
+                rec.ondataavailable = e => chunks.push(e.data);
+                rec.start();
+                mic.classList.add('recording');
+            } catch(e) { alert("افتح صلاحية الميكروفون!"); }
+        };
+        mic.onmouseup = () => {
+            if(rec?.state === 'recording') {
+                rec.stop();
+                mic.classList.remove('recording');
+                rec.onstop = () => {
+                    const r = new FileReader();
+                    r.onloadend = () => push(ref(db, 'msgs'), { audio: r.result, uid: auth.currentUser.uid, time: serverTimestamp() });
+                    r.readAsDataURL(new Blob(chunks, { type: 'audio/webm' }));
+                    chunks = [];
+                };
+            }
+        };
+
+        function loadMsgs() {
+            onChildAdded(ref(db, 'msgs'), s => render(s.val(), s.key));
+            onChildChanged(ref(db, 'msgs'), s => {
+                const el = document.getElementById(s.key);
+                if(!el) return;
+                if(s.val().reaction) {
+                    let r = el.querySelector('.react-box') || document.createElement('div');
+                    r.className = 'react-box'; r.innerText = s.val().reaction; el.appendChild(r);
+                }
+                if(s.val().text) el.querySelector('.txt').innerText = s.val().text + " (معدلة)";
+            });
+            onChildRemoved(ref(db, 'msgs'), s => document.getElementById(s.key)?.remove());
+        }
+
+        function render(data, id) {
+            const isMe = data.uid === auth.currentUser.uid;
+            const div = document.createElement('div');
+            div.id = id; div.className = `msg ${isMe ? 'sent' : 'received'} ${data.sticker ? 'stk-msg' : ''}`;
+            let h = "";
+            if(data.text) h = `<div class="txt">${data.text}</div>`;
+            if(data.sticker) h = `<img src="${data.sticker}">`;
+            if(data.audio) h = `<audio src="${data.audio}" controls style="width:160px; height:30px;"></audio>`;
+            if(data.reaction) h += `<div class="react-box">${data.reaction}</div>`;
+            div.innerHTML = h;
+            div.onclick = () => openSheet(id, data.text, isMe, !!data.sticker, data.sticker);
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        }
+
+        window.togglePicker = () => { const p = document.getElementById('picker-panel'); p.style.display = p.style.display === 'flex' ? 'none' : 'flex'; };
+        window.showTab = (t) => {
+            document.querySelectorAll('.picker-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-'+t).style.display = 'grid';
+            event.target.classList.add('active');
+        };
+
+        window.openSheet = (id, text, isMe, isStk, url) => {
+            selId = id; selText = text; selStk = url;
+            document.getElementById('overlay').style.display = 'block';
+            const s = document.getElementById('action-sheet');
+            s.style.display = 'block';
+            setTimeout(() => s.style.transform = 'translateY(0)', 10);
+            document.getElementById('edit-opt').style.display = (isMe && !isStk) ? 'flex' : 'none';
+            document.getElementById('del-opt').style.display = isMe ? 'flex' : 'none';
+            document.getElementById('save-stk-opt').style.display = isStk ? 'flex' : 'none';
+        };
+
+        window.closeSheet = () => {
+            const s = document.getElementById('action-sheet');
+            s.style.transform = 'translateY(100%)';
+            setTimeout(() => { s.style.display = 'none'; document.getElementById('overlay').style.display = 'none'; }, 300);
+        };
+
+        window.handle = (type, val) => {
+            if(type === 'react') update(ref(db, `msgs/${selId}`), { reaction: val });
+            if(type === 'delete') remove(ref(db, `msgs/${selId}`));
+            if(type === 'edit') { const nt = prompt("تعديل:", selText); if(nt) update(ref(db, `msgs/${selId}`), { text: nt }); }
+            if(type === 'saveStk') {
+                let f = JSON.parse(localStorage.getItem('favs') || '[]');
+                if(!f.includes(selStk)) { f.push(selStk); localStorage.setItem('favs', JSON.stringify(f)); loadFavs(); }
+            }
+            closeSheet();
+        };
+
+        function loadFavs() {
+            const c = document.getElementById('tab-fav'); c.innerHTML = "";
+            JSON.parse(localStorage.getItem('favs') || '[]').forEach(s => {
+                const i = document.createElement('img'); i.src = s; i.onclick = () => sendStk(s); c.appendChild(i);
+            });
+        }
+
+        // PWA Registration
+        if('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+    </script>
+</body>
+</html>
