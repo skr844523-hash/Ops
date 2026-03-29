@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ملاحظاتي</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#075e54">
+    
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignal.public.js" async></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "5ef3aeb9-ebdd-48cf-b1cf-eb74dea8ed2d", // الـ App ID بتاعك
+          notifyButton: { enable: false }, // مخفي للتمويه
+          allowLocalhostAsSecureOrigin: true
+        });
+      });
+    </script>
+
+    <style>
+        :root { --main-color: #075e54; --bg: #e5ddd5; --my-msg: #dcf8c6; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); overflow: hidden; }
+        
+        /* شاشة التمويه (الملاحظات) */
+        #fakeApp { position: fixed; inset: 0; background: #fff; z-index: 1000; display: flex; flex-direction: column; }
+        .fake-header { background: #f5f5f5; padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; text-align: center; color: #333; font-size: 1.2rem; }
+        #noteArea { flex: 1; border: none; padding: 20px; font-size: 1.2rem; outline: none; resize: none; }
+        .save-btn { padding: 15px; background: #28a745; color: white; border: none; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+
+        /* شاشة تسجيل الدخول السرية */
+        #loginScreen { display: none; position: fixed; inset: 0; background: #fff; z-index: 999; flex-direction: column; justify-content: center; align-items: center; gap: 15px; }
+        .input-box { width: 85%; max-width: 320px; padding: 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; text-align: center; outline: none; }
+        .go-btn { width: 85%; max-width: 320px; padding: 14px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; font-weight: bold; }
+
+        /* شاشة الشات الحقيقية */
+        #chatApp { display: none; flex-direction: column; height: 100%; }
+        .chat-header { background: var(--main-color); color: white; padding: 15px; display: flex; align-items: center; gap: 12px; font-size: 1.1rem; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 10; }
+        .avatar { background: #ccc; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 1.2rem; }
+        #msgBox { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+        .bubble { padding: 10px 15px; border-radius: 12px; max-width: 75%; font-size: 15px; line-height: 1.4; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
+        .me { align-self: flex-start; background: var(--my-msg); border-top-right-radius: 0; }
+        .other { align-self: flex-end; background: white; border-top-left-radius: 0; }
+        .time { font-size: 10px; color: #888; margin-top: 5px; display: block; text-align: left; }
+        
+        .chat-footer { background: #f0f0f0; padding: 10px; display: flex; gap: 10px; align-items: center; }
+        #msgInput { flex: 1; padding: 12px 15px; border-radius: 25px; border: 1px solid #ccc; outline: none; font-size: 1rem; }
+        #sendBtn { background: var(--main-color); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; display: flex; justify-content: center; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div id="fakeApp">
+        <div class="fake-header">ملاحظاتي الشخصية</div>
+        <textarea id="noteArea" placeholder="اكتب مذكراتك أو ملاحظاتك هنا..."></textarea>
+        <button class="save-btn" onclick="checkPassword()">حفظ الملاحظة</button>
+    </div>
+
+    <div id="loginScreen">
+        <h3 style="color: var(--main-color); margin-bottom: 5px;">تأكيد الهوية</h3>
+        <input type="text" id="myId" class="input-box" placeholder="اسمك أو الـ ID بتاعك">
+        <input type="text" id="friendId" class="input-box" placeholder="اسم الطرف الآخر">
+        <button class="go-btn" onclick="startChat()">بدء المحادثة</button>
+    </div>
+
+    <div id="chatApp">
+        <div class="chat-header">
+            <div class="avatar">👤</div>
+            <div style="display: flex; flex-direction: column;">
+                <span id="chatTitle" style="line-height: 1;">جارِ التحميل...</span>
+                <span style="font-size: 0.7rem; color: #adffad; margin-top: 3px;">محادثة مشفرة</span>
+            </div>
+        </div>
+        <div id="msgBox"></div>
+        <div class="chat-footer">
+            <input type="text" id="msgInput" placeholder="اكتب رسالة..." onkeypress="handleEnter(event)">
+            <button id="sendBtn" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // بيانات Firebase الخاصة بك 
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHleS3vqpik1BzJ3dal2L245dsrlo9lx0",
+            authDomain: "mons-eb73c.firebaseapp.com",
+            databaseURL: "https://mons-eb73c-default-rtdb.firebaseio.com",
+            projectId: "mons-eb73c",
+            storageBucket: "mons-eb73c.firebasestorage.app",
+            messagingSenderId: "1054828640380",
+            appId: "1:1054828640380:web:6a3e4e5d208adc4894b1f9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        let myId, friendId, roomId;
+
+        // كلمة السر للدخول (2244)
+        window.checkPassword = () => {
+            const note = document.getElementById('noteArea').value.trim();
+            if (note === "2244") {
+                document.getElementById('fakeApp').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'flex';
+                
+                // طلب إذن الإشعارات من المتصفح
+                OneSignalDeferred.push(function(OneSignal) {
+                    OneSignal.Slidedown.promptPush();
+                });
+            } else {
+                alert("تم حفظ الملاحظة بنجاح!");
+            }
+        };
+
+        window.startChat = () => {
+            myId = document.getElementById('myId').value.trim().toLowerCase();
+            friendId = document.getElementById('friendId').value.trim().toLowerCase();
+            
+            if (!myId || !friendId) { alert("يرجى إدخال البيانات كاملة"); return; }
+
+            // تسجيل المستخدم في OneSignal باسمه عشان نبعتله إشعار مخصوص
+            OneSignalDeferred.push(function(OneSignal) {
+                OneSignal.login(myId);
+            });
+
+            // اسم الغرفة الموحد
+            roomId = myId < friendId ? `${myId}_${friendId}` : `${friendId}_${myId}`;
+            
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('chatApp').style.display = 'flex';
+            document.getElementById('chatTitle').innerText = friendId;
+
+            loadMessages();
+        };
+
+        function loadMessages() {
+            const chatRef = ref(db, 'chats/' + roomId);
+            onValue(chatRef, (snapshot) => {
+                const box = document.getElementById('msgBox');
+                box.innerHTML = "";
+                const data = snapshot.val();
+                if (data) {
+                    Object.values(data).forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = `bubble ${msg.sender === myId ? 'me' : 'other'}`;
+                        
+                        let timeString = "";
+                        if(msg.time) {
+                            const d = new Date(msg.time);
+                            timeString = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        }
+
+                        div.innerHTML = `${msg.text} <span class="time">${timeString}</span>`;
+                        box.appendChild(div);
+                    });
+                    box.scrollTop = box.scrollHeight;
+                }
+            });
+        }
+
+        window.handleEnter = (e) => { if(e.key === 'Enter') sendMessage(); }
+
+        window.sendMessage = async () => {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                // 1. الحفظ في فايربيز
+                push(ref(db, 'chats/' + roomId), {
+                    sender: myId,
+                    text: text,
+                    time: serverTimestamp()
+                });
+                input.value = "";
+
+                // 2. إرسال الإشعار للطرف الآخر
+                sendPushNotification(friendId, text);
+            }
+        };
+
+        // دالة الإشعارات الفورية
+        async function sendPushNotification(targetId, messageText) {
+            // ⚠️ هام جداً: ضع الـ REST API Key بتاع OneSignal هنا
+            const REST_API_KEY = "os_v2_app_l3z25opl3vem7mop5n2n5khnfvk5ft5eki5uuhv7adyds45jk64vpdckyy36zzbcbey36bf4o5pwirmnpixg67pfblmbrxozvck5xhi"; 
+            const APP_ID = "5ef3aeb9-ebdd-48cf-b1cf-eb74dea8ed2d";
+
+            if (REST_API_KEY === "حط_هنا_REST_API_KEY_بتاع_OneSignal") return;
+
+            const payload = {
+                app_id: APP_ID,
+                target_channel: "push",
+                include_aliases: { external_id: [targetId] },
+                headings: { en: "ملاحظة جديدة", ar: "ملاحظة جديدة" }, // تمويه في الإشعار
+                contents: { en: "لديك تحديث جديد في الملاحظات.", ar: "لديك تحديث جديد في الملاحظات." } // تمويه في محتوى الإشعار
+            };
+
+            try {
+                await fetch("https://onesignal.com/api/v1/notifications", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Basic ${REST_API_KEY}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+            } catch (error) { console.error("Error:", error); }
+        }
+    </script>
+</body>
+</html>
